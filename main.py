@@ -1,12 +1,16 @@
 import logging
 import asyncio
 import sqlite3
+import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Message
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from decouple import config
+from ver import verify
 
+TOKEN = config('BOT_TOKEN')
 # Database setup
 def init_db():
     conn = sqlite3.connect("water_bot.db")
@@ -18,10 +22,13 @@ def init_db():
     cursor.execute('''CREATE TABLE IF NOT EXISTS users (
                       id INTEGER PRIMARY KEY AUTOINCREMENT,
                       telegram_id INTEGER UNIQUE,
+                      iin INTEGER UNIQUE,
                       name TEXT,
                       phone TEXT UNIQUE,
+                      tag TEXT UNIQUE,
                       household_id INTEGER,
                       verified INTEGER DEFAULT 0,
+                      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                       FOREIGN KEY(household_id) REFERENCES households(id))''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS transactions (
                       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,7 +39,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-TOKEN = "7663940717:AAHrky-MSyTuC4NCzRcRPdVa8eQrlthNItw"
+
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
@@ -53,16 +60,16 @@ async def start(message: Message):
 @dp.message(Command("register"))
 async def register(message: Message, state: FSMContext):
     await state.set_state(RegistrationState.waiting_for_registration)
-    await message.answer("Please send your details in format: Name, Address, Phone")
+    await message.answer("Please send your details in format: Name, iin, Address, Phone, tag")
 
 @dp.message(RegistrationState.waiting_for_registration)
 async def save_registration(message: Message, state: FSMContext):
     user_id = message.from_user.id
     text = message.text.split(",")
     if len(text) != 3:
-        await message.answer("Invalid format. Use: Name, Address, Phone")
+        await message.answer("Invalid format. Use: Name, iin, Address, Phone, tag")
         return
-    name, address, phone = map(str.strip, text)
+    name, iin, address, phone, tag = map(str.strip, text)
     conn = sqlite3.connect("water_bot.db")
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM households WHERE address = ?", (address,))
@@ -74,8 +81,8 @@ async def save_registration(message: Message, state: FSMContext):
     else:
         household_id = household[0]
     try:
-        cursor.execute("INSERT INTO users (telegram_id, name, phone, household_id, verified) VALUES (?, ?, ?, ?, ?)",
-                       (user_id, name, phone, household_id, 1))
+        cursor.execute("INSERT INTO users (telegram_id, name, iin, tag, phone, household_id, verified) VALUES (?, ?, ?, ?, ?)",
+                       (user_id, name, iin, tag, phone, household_id, 1))
         conn.commit()
         await message.answer("Registration successful! Now add household members using /add_member.")
         await state.clear()
@@ -86,30 +93,28 @@ async def save_registration(message: Message, state: FSMContext):
 @dp.message(Command("add_member"))
 async def add_member(message: Message, state: FSMContext):
     await state.set_state(RegistrationState.waiting_for_member)
-    await message.answer("Send member details in format: Name, Phone")
+    await message.answer("Send member details in format: Telegram Tag 1, Telegram Tag 2 etc.")
 
 @dp.message(RegistrationState.waiting_for_member)
 async def save_member(message: Message, state: FSMContext):
     user_id = message.from_user.id
     text = message.text.split(",")
     if len(text) != 2:
-        await message.answer("Invalid format. Use: Name, Phone")
+        await message.answer("Invalid format. Use: Telegram Tag 1, Telegram Tag 2 etc.")
         return
-    member_name, member_phone = map(str.strip, text)
+    tags = map(str.strip, text)
     conn = sqlite3.connect("water_bot.db")
     cursor = conn.cursor()
     cursor.execute("SELECT household_id FROM users WHERE telegram_id = ?", (user_id,))
     result = cursor.fetchone()
     if result:
         household_id = result[0]
-        try:
-            cursor.execute("INSERT INTO users (telegram_id, name, phone, household_id, verified) VALUES (?, ?, ?, ?, ?)",
-                           (None, member_name, member_phone, household_id, 0))
-            conn.commit()
-            await message.answer(f"Added {member_name}. Ask them to start the bot and verify with /verify.")
-            await state.clear()
-        except sqlite3.IntegrityError:
-            await message.answer("This phone number is already registered.")
+        cursor.execute("SELECT address FROM households WHERE id = ?",(household_id,))
+        address = cursor.fetchone()[0]
+        for tag in tags:
+           await verify(tag, address)
+        await message.answer(f"Отправили подтверждение всем сожителям:{", ".join(tags)}")
+        await state.clear()
     else:
         await message.answer("You must register first using /register.")
     conn.close()
