@@ -11,4 +11,5 @@ tables
 geocoder
 
 qrcode
+
 __pycache__
