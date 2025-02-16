@@ -7,11 +7,16 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from decouple import config
 from geocoder import geocode_address 
 import asyncio
+import os
 
 from db_handler import DBHandler
-
+from gpt_handler import GPTHandler
+# GPT-related configurations
+EMBEDDING_MODEL = config('EMBEDDING_MODEL')
+CHAT_MODEL = config('CHAT_MODEL')
+SYSTEM_PROMPT = config('SYSTEM_PROMPT')
+CONTEXT_Q__SYSTEM_PROMPT = config('CONTEXT_Q__SYSTEM_PROMPT')
 TOKEN = config("BOT_TOKEN")
-print(TOKEN)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -23,6 +28,7 @@ class RegistrationState(StatesGroup):
     waiting_for_phone = State()
     waiting_for_address = State()
     waiting_for_address_ft = State()
+    polling_bot = State()
 
 
 @dp.message(Command("start"))
@@ -34,14 +40,14 @@ async def start(message: types.Message, state: FSMContext):
         args = message.text.split()
 
         if(len(args)>1 and args[1].startswith("invite_")):
-            household_id = args[1][6:]
+            household_id = args[1][7:]
             print(household_id)
             await state.update_data(address=household_id)
             await message.answer("Invitation was approved. Please enter your IIN to start registration:")
             await state.set_state(RegistrationState.waiting_for_iin)
-
-        await message.answer("Welcome! Please enter your Address to start your Registration:")
-        await state.set_state(RegistrationState.waiting_for_address_ft)
+        else:
+            await message.answer("Welcome! Please enter your Address to start your Registration:")
+            await state.set_state(RegistrationState.waiting_for_address_ft)
 
 @dp.message(Command("help"))
 async def help_handler(message: Message):
@@ -100,16 +106,13 @@ async def process_phone(message: Message, state: FSMContext):
     await state.clear()
 
 @dp.message(Command("invite"))
-async def invite_users(message: Message):
-    await message.answer("Send a list of @usernames to invite (comma-separated):")
-
-@dp.message()
-async def process_invites(message: Message):
+async def process_invites(message: Message, state: FSMContext):
     user_id = message.from_user.id
-    usernames = [u.strip() for u in message.text.split(",")]
     household_id = db.fetch_column("users","household_id",{"tg_id": user_id})[0][0]
     invite_link = f"https://t.me/water_collect_bot?start=invite_{household_id}"
     await message.answer(f"Share these invite links:\n{invite_link}")
+    await state.clear()
+
 
 async def main():
     await dp.start_polling(bot)

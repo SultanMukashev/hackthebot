@@ -2,95 +2,13 @@ import asyncio
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-
-from aiogram.fsm.state import StatesGroup, State
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
-from decouple import config
 
-from db_handler import DBHandler  # Assuming DBHandler is in db_handler.py
-from generator import generate_qr_code
-
-
-# Load bot token from environment variables
-TOKEN = config('ADMIN_BOT_TOKEN')  # Change token for admin bot
+TOKEN = "7983345195:AAGlRA4sErIanYp8HykUQ_EOVV4AceTRBk4"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
-
-db = DBHandler()
-
-class RegistrationState(StatesGroup):
-    get_xlsx = State()
-    generate_qr = State()
-
-# Admins' Telegram IDs (replace with actual IDs)
-ADMIN_IDS = {704415982}  # Replace with real admin Telegram IDs
-
-def upsert_employee(employee_id, name, employed_date, phone_number):
-    """Insert a new employee or update an existing one."""
-    existing_employee = db.fetch_one("employees", {"employee_id": employee_id})
-    
-    if existing_employee:
-        db.update("employees", {"name": name, "employed_date": employed_date, "phone_number": phone_number}, {"employee_id": employee_id})
-        return f"🔄 Updated existing employee: {name}"
-    else:
-        db.insert("employees", {"employee_id": employee_id, "name": name, "employed_date": employed_date, "phone_number": phone_number})
-        return f"✅ Added new employee: {name}"
-
-async def process_employee_file(file_path):
-    """Reads an Excel file and upserts employee records."""
-    try:
-        df = pd.read_excel(file_path)
-        if not {'name', 'employee_id', 'employed_date', "phone_number"}.issubset(df.columns):
-            return "❌ Error: Excel file must contain 'name', 'employee_id','phone_number' and 'employed_date' columns."
-        
-        results = [upsert_employee(row['employee_id'], row['name'], row['employed_date'], row["phone_number"]) for _, row in df.iterrows()]
-        return "\n".join(results)
-    except Exception as e:
-        return f"❌ Unexpected error: {str(e)}"
-
-@dp.message(CommandStart())
-async def start_handler(message: Message):
-    """Only allows admins to use the bot."""
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("❌ You are not authorized to use this bot.")
-        return
-    await message.answer("👋 Welcome, Admin! Send me an Excel file with employee details.")
-
-@dp.message(lambda message: message.document)
-async def handle_excel_upload(message: Message):
-    """Handles document uploads and processes employee data."""
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("❌ You are not authorized to use this bot.")
-        return
-    
-    document = message.document
-    file_path = f"temp_{document.file_name}"
-
-    file = await bot.download(document)
-    with open(file_path, "wb") as f:
-        f.write(file.read())
-
-    result = await process_employee_file(file_path)
-    await message.answer(result)
-
-@dp.message(Command("generate_qr"))
-async def generate_qr_handler(message: Message):
-    """Handles the /generate_qr command."""
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("❌ You are not authorized to use this bot.")
-        return
-
-    text = "https://t.me/water_trash_admin_bot?start="+message.text.replace("/generate_qr", "").strip()
-    if not text:
-        await message.answer("❌ Please provide text to generate a QR code.\nExample: `/generate_qr https://example.com`")
-        return
-
-    file_path = generate_qr_code(text)
-    qr_image = FSInputFile(file_path)
-
-    await message.answer_photo(photo=qr_image, caption="✅ Here is your QR code.")
 
 # Load Data
 users_df = pd.read_csv(r"db_files\users.csv")
@@ -178,7 +96,6 @@ async def analysis3(callback_query: types.CallbackQuery):
     avg_bottles_per_person = household_df['bottle_balance'].sum() / len(users_df)
     result_text = f"Average Bottles Per Person: {avg_bottles_per_person:.2f}"
     await callback_query.message.answer(result_text)
-
 
 async def main():
     """Start the bot."""
