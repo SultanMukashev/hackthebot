@@ -82,7 +82,7 @@ async def generate_qr_handler(message: Message):
         await message.answer("❌ You are not authorized to use this bot.")
         return
 
-    text = "https://t.me/water_trash_admin_bot?start="+message.text.replace("/generate_qr", "").strip()
+    text = "https://t.me/water_collect_bot?start="+message.text.replace("/generate_qr", "").strip()
     if not text:
         await message.answer("❌ Please provide text to generate a QR code.\nExample: `/generate_qr https://example.com`")
         return
