@@ -71,6 +71,9 @@ def chatbot_loop():
         chat_history.append(HumanMessage(content=query))
         chat_history.append(SystemMessage(content=result["answer"]))
 
+        if len(chat_history) > 10:
+            chat_history = []
+
 # Run chatbot loop
 if __name__ == "__main__":
     chatbot_loop()
