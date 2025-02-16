@@ -4,3 +4,11 @@ trunc.sql
 
 .env
 
+trash
+
+tables
+
+geocoder
+
+qrcode
+__pycache__
